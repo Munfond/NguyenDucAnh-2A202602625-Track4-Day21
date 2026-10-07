@@ -27,13 +27,22 @@ Các ngưỡng và kết luận sẽ được kiểm chứng hoặc sửa ở ch
 
 ## 2. Evidence
 
-Bảng hoặc plot số liệu, kèm ảnh/video demo. Ghi rõ đường dẫn file trong `results/`.
+Baseline CP2: self-test số và ba overlay khớp chính xác với hướng dẫn; claim về cảnh báo suy giảm ở mục 1 chưa được kiểm chứng.
 
-| Cấu hình / mức perturb | Metric 1 | Metric 2 | Ghi chú |
-|---|---|---|---|
-| [ĐIỀN] | | | |
+| Dataset / frame | Tổng điểm | Điểm trong ảnh | Tỷ lệ |
+|---|---:|---:|---:|
+| synthetic / 000000 | 23953 | 3910 | 16,3% |
+| KITTI / 000011 | 108004 | 19946 | 18,5% |
+| nuScenes / scene-0103_010 | 34720 | 3120 | 9,0% |
+| synthetic / 000000, yaw +2° | 23953 | 3956 | 16,5% |
 
-![demo](../results/figures/[ĐIỀN].png)
+Dashboard đầu tiên có 4 biểu đồ: số điểm/frame, tỷ lệ điểm lỗi, range p95 theo mặt phẳng XY và intensity trung bình của điểm hữu hạn; CSV đầu vào được tái tạo bằng lệnh ở mục 5.
+![Dashboard E baseline](../results/figures/dashboard_synthetic_cp2.png)
+![Overlay synthetic gốc](../results/figures/overlay_000000_r0.0_p0.0_y0.0_t0.0_0.0_0.0.png)
+![Overlay KITTI](../results/figures/overlay_000011_r0.0_p0.0_y0.0_t0.0_0.0_0.0.png)
+![Overlay nuScenes](../results/figures/overlay_scene-0103_010_r0.0_p0.0_y0.0_t0.0_0.0_0.0.png)
+Đã xem ảnh: điểm bám theo mặt đường, tường, xe và người; nuScenes có mật độ chiếu thưa hơn. Khi yaw +2°, điểm trượt khỏi cột dù tỷ lệ trong ảnh tăng nhẹ: metric FOV không đủ để kiểm tra alignment.
+![Overlay synthetic yaw +2 độ](../results/figures/overlay_000000_r0.0_p0.0_y2.0_t0.0_0.0_0.0.png)
 
 ## 3. Failure case
 
@@ -51,11 +60,23 @@ Use-case cụ thể (ADAS / robot / drone), trade-off và bước tiếp theo.
 
 ## 5. Cách chạy lại
 
-Các lệnh tái tạo lại toàn bộ kết quả từ repo sạch.
+Chạy từ thư mục gốc repo trong PowerShell, dùng Python >=3.10; nếu đã có `.venv` thì bỏ lệnh tạo môi trường.
 
-```bash
-[ĐIỀN]
+```powershell
+py -3.12 -m venv .venv
+.\.venv\Scripts\Activate.ps1
+python -m pip install -r requirements.txt
+python -m src.test_projection
+python -m starter.projection --data-root data/synthetic --frame 000000
+python -m starter.projection --data-root data/kitti_mini --frame 000011
+python -m starter.projection --data-root data/nuscenes_mini_subset --frame scene-0103_010
+python -m starter.projection --data-root data/synthetic --frame 000000 --yaw-deg 2
+python -m starter.data_health --data-root data/synthetic --out results/data_health.csv
+python -m src.data_health_dashboard --csv results/data_health.csv --out results/figures/dashboard_synthetic_cp2.png
 ```
+
+Self-test kiểm tra điểm chuẩn `(10,0,0)`, NaN/Inf, điểm sau camera, FOV, biên ảnh, mảng rỗng và mẫu số chiếu bằng 0; đồng thời xác nhận số điểm trong ảnh của cả ba dataset.
+Trên macOS/Linux, tạo môi trường bằng `python3 -m venv .venv` và kích hoạt bằng `source .venv/bin/activate`; các lệnh Python còn lại giữ nguyên.
 
 ## 6. Khai báo sử dụng AI
 
@@ -63,4 +84,4 @@ Ghi rõ đã dùng công cụ AI nào, dùng vào việc gì, và bạn đã t�
 
 | Công cụ | Dùng cho việc gì | Bạn đã kiểm chứng thế nào |
 |---|---|---|
-| Codex | Hỗ trợ thiết lập CP0; đọc rubric, kiểm tra cấu hình máy, chọn topic E và soạn kế hoạch/claim nháp CP1. | Đã chạy kiểm tra import, checksum và thống kê CP0; đối chiếu topic/claim với CHECKPOINTS.md, TOPICS.md, RUBRIC.md và kiểm tra frame tồn tại. Claim CP1 chưa được thực nghiệm; học viên cần tự chạy lại và giải thích kết quả. |
+| Codex | Hỗ trợ thiết lập CP0; đọc rubric, kiểm tra cấu hình máy, chọn topic E và soạn kế hoạch/claim nháp CP1; cài hai hàm phép chiếu CP2, self-test và dashboard baseline. | Đã chạy kiểm tra import, checksum và thống kê CP0; đối chiếu topic/claim với CHECKPOINTS.md, TOPICS.md, RUBRIC.md và kiểm tra frame tồn tại. CP2 đã chạy self-test, xác nhận 3910/19946/3120 điểm và xem ảnh overlay/dashboard. Claim CP1 chưa được thực nghiệm; học viên cần tự chạy lại và giải thích kết quả. |
