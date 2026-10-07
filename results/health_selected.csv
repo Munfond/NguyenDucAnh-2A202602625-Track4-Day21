@@ -1,0 +1,7 @@
+dataset,selected_threshold,calibration_fpr_target_met,perturbation,level,n_test_frames,flagged_test_frames,flag_rate,metric
+kitti_mini,0.4,True,original,0,10,1,0.1,false_alarm_rate
+kitti_mini,0.4,True,random_dropout,0.5,10,10,1,detection_rate
+kitti_mini,0.4,True,sector_dropout,30,10,10,1,detection_rate
+nuscenes_mini_subset,0.6,False,original,0,40,32,0.8,false_alarm_rate
+nuscenes_mini_subset,0.6,False,random_dropout,0.5,40,40,1,detection_rate
+nuscenes_mini_subset,0.6,False,sector_dropout,30,40,40,1,detection_rate
