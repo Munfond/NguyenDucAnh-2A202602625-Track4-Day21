@@ -1,0 +1,5 @@
+dataset,scene,n_frames,median_points,mean_intensity,mean_range_p95,median_time_gap_s,min_camera_minus_lidar_ms,max_camera_minus_lidar_ms,flagged_frames
+kitti_mini,kitti_mini,20,120340,0.2532060742,33.53832607,,,,2
+nuscenes_mini_subset,scene-0103,40,34720,0.05881117107,31.80616922,0.499876,-37.76,-34.232,33
+nuscenes_mini_subset,scene-1094,40,34720,0.08046207577,40.95086021,0.499885,-39.535,-34.599,33
+synthetic,synthetic,5,23781,0.158678627,58.2407402,0.1,,,1

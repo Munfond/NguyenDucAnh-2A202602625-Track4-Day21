@@ -1,151 +1,98 @@
 # Báo cáo Day 6: Phát hiện suy giảm LiDAR bằng mật độ góc quét
 
-> Phần bắt buộc đã đủ 5 sản phẩm. Đề nghị xét bonus B1 (+4), B2 (+3), B3 (+2), B4 (+3): tổng đề nghị 12, chỉ cộng tối đa 10 và tổng điểm không vượt 100; việc tính điểm do giảng viên quyết định. Không đề nghị B5 vì so sánh hai dataset trùng yêu cầu Advanced của E; không đề nghị B6 khi chưa xác minh tất cả lỗi synthetic.
-
 - **Họ tên:** Nguyễn Đức Anh
 - **MSSV:** 2A202602625
 - **Lớp:** AI20K-T4
 - **Link repo:** https://github.com/Munfond/NguyenDucAnh-2A202602625-Track4-Day21
 - **Topic:** E — Data health dashboard (mục tiêu Advanced)
 - **Dataset:** data/synthetic (debug và kiểm tra lỗi); data/kitti_mini và data/nuscenes_mini_subset (thí nghiệm chính).
-- **Các frame đã dùng:** CP3 đã chạy thí nghiệm trên toàn bộ frame thật dưới đây; synthetic dùng cho CP0/CP2:
+- **Các frame đã dùng:** 105 frame đã được thống kê; 100 frame thật dùng cho benchmark:
   - Synthetic: 000000, 000001, 000002, 000003, 000004.
   - KITTI: 000001, 000004, 000007, 000008, 000009, 000010, 000011, 000012, 000015, 000016, 000019, 000021, 000023, 000025, 000031, 000032, 000043, 000048, 000049, 000061.
   - nuScenes: scene-0103_000 đến scene-0103_039 và scene-1094_000 đến scene-1094_039 (đủ 80 frame).
 
-> Hãy viết ngắn: mỗi mục từ 3 đến 8 dòng, ưu tiên số liệu và hình ảnh.
-
 ## 1. Claim
 
-**Claim ban đầu (CP1):** Trên KITTI và nuScenes, cảnh báo dùng mật độ góc quét chuẩn hóa theo từng dataset phát hiện được ít nhất 90% frame bị random dropout 50% hoặc mất sector 30°, với tỷ lệ báo nhầm không quá 10% trên dữ liệu gốc.
-
-Mình sẽ đo tỷ lệ phát hiện, tỷ lệ báo nhầm và mật độ góc quét trên 20 frame KITTI và 80 frame nuScenes, với random dropout 10/30/50% và sector dropout 10/20/30°, kèm mức gốc 0; seed cố định 42.
-Chọn ngưỡng trên các frame có thứ tự chẵn trong danh sách đã sắp xếp, đánh giá trên các frame thứ tự lẻ (đánh số từ 0; nuScenes chia riêng từng scene); báo cáo metric riêng theo dataset và loại suy giảm.
-Dùng synthetic để debug; ảnh minh họa chọn KITTI 000008, 000011, 000049 và nuScenes scene-0103_000, scene-0103_020, scene-1094_000, scene-1094_020.
-Quan sát CP0: synthetic 000003 có 22.063 điểm, so với 23.760–23.953 ở các frame còn lại, nhưng mọi frame đều có 0 ô azimuth trống; cần kiểm tra mật độ chi tiết để xác định nguyên nhân và khả năng bỏ sót của quy tắc ô trống.
-**Kết luận CP3:** claim ban đầu bị bác bỏ trên tập thử này: KITTI đạt 100% phát hiện hai loại suy giảm mạnh và 10% báo nhầm ở ngưỡng 0,4, nhưng nuScenes báo nhầm 80% ngay tại ngưỡng 0,6. Không suy luận nhân quả ngày/đêm từ hai scene khác nhau.
+**Kết luận cuối:** trên tập test KITTI, score dùng ô góc xấu nhất ở ngưỡng 0,4 phát hiện 100% dropout 50% và sector dropout 30°, báo trên gốc 10%; trên nuScenes, ngưỡng 0,6 vẫn báo trên gốc 80%, nên cách này chưa dùng được như bộ phân loại lỗi sensor chung.
+**Claim ban đầu:** phát hiện ≥90% hai loại suy giảm mạnh với báo nhầm ≤10% trên cả hai dataset; **bị bác bỏ** trên nuScenes trong các ngưỡng đã khảo sát (0,2/0,4/0,6).
+Thí nghiệm có 20 frame KITTI và 80 nuScenes, random dropout 0/10/30/50%, sector dropout 0/10/20/30°, seed 42; test gồm 10/40 frame lẻ, calibration gồm 10/40 frame chẵn (nuScenes chia riêng từng scene).
+Reference fit và chọn ngưỡng chỉ từ calibration; frame liền kề nên chưa chứng minh tổng quát sang scene mới. “Báo nhầm” ở đây coi frame gốc là đối chứng âm, không khẳng định mọi frame gốc sạch lỗi sensor.
 
 ## 2. Evidence
 
-CP3 chạy 100 frame thật × 7 cấu hình (gốc + random dropout 10/30/50% + sector dropout 10/20/30°), rồi quét ngưỡng 0,2/0,4/0,6: tổng 700 cấu hình dữ liệu và 2.100 dòng cảnh báo; seed 42.
-Reference là median số điểm và median mật độ từng ô azimuth 10° trên nhóm calibration; score = clip(max(1 − n/reference_n, max_bin(1 − bin_count/reference_bin)), 0, 1); chỉ dùng ô reference > 0 và cảnh báo khi score > ngưỡng.
-Tách calibration/test chẵn/lẻ từ trước; nuScenes tách riêng từng scene. Chọn ngưỡng nhỏ nhất trong ba ứng viên có báo nhầm calibration ≤10%; KITTI chọn 0,4. nuScenes không có ngưỡng đạt mục tiêu, nên 0,6 chỉ là fallback để mô tả thất bại, không phải cấu hình đạt claim.
+700 cấu hình dữ liệu × 3 ngưỡng = 2.100 dòng cảnh báo; score = clip(max(1−n/reference_n, max_bin(1−bin/reference_bin)),0,1), reference median trên calibration, cảnh báo khi score > ngưỡng. nuScenes không có ngưỡng đạt báo trên calibration ≤10%; 0,6 là fallback.
 
-| Dataset | Ngưỡng | Báo nhầm trên gốc | Phát hiện dropout 50% | Phát hiện mất sector 30° |
+| Dataset / cách | Ngưỡng | Báo trên gốc | Phát hiện random 50% | Phát hiện sector 30° |
 |---|---:|---:|---:|---:|
-| kitti_mini | 0.2 | 5/10 (50%) | 10/10 (100%) | 10/10 (100%) |
-| kitti_mini | 0.4 | 1/10 (10%) | 10/10 (100%) | 10/10 (100%) |
-| kitti_mini | 0.6 | 0/10 (0%) | 6/10 (60%) | 10/10 (100%) |
-| nuscenes_mini_subset | 0.2 | 39/40 (97.5%) | 40/40 (100%) | 40/40 (100%) |
-| nuscenes_mini_subset | 0.4 | 37/40 (92.5%) | 40/40 (100%) | 40/40 (100%) |
-| nuscenes_mini_subset | 0.6 | 32/40 (80%) | 40/40 (100%) | 40/40 (100%) |
+| KITTI / worst_bin | 0,4 | 1/10 (10%) | 10/10 (100%) | 10/10 (100%) |
+| nuScenes / worst_bin | 0,6 fallback | 32/40 (80%) | 40/40 (100%) | 40/40 (100%) |
+| KITTI / global_count | 0,2 | 0/10 (0%) | 10/10 (100%) | 0/10 (0%) |
+| nuScenes / global_count | 0,2 | 0/40 (0%) | 40/40 (100%) | 0/40 (0%) |
 
-**[B2] Stress test (+3):** hai loại từ `starter.perturb` × ba mức: random dropout 10/30/50% và sector dropout 10/20/30°, có mức gốc 0, seed 42, giữ nguyên frame/reference/ngưỡng khi đổi mức. Plot bên dưới cho thấy mức suy giảm theo score và khả năng gắn cờ; số liệu từng cấu hình ở `health_scores.csv`/`health_threshold_sweep.csv`. Đây là phần mở rộng ngoài yêu cầu chính E về quét ngưỡng trên dữ liệu gốc.
-
-![Threshold trade-off and degradation response](../results/figures/health_threshold_sweep.png)
-
-KITTI: tăng ngưỡng từ 0,2 lên 0,6 làm báo nhầm giảm 50% → 0%, nhưng phát hiện dropout 50% giảm 100% → 60%; mất sector 30° vẫn đạt 100%.
-nuScenes: báo nhầm giảm 97,5% → 80% khi tăng ngưỡng 0,2 → 0,6; mean score gốc của scene-0103/scene-1094 là 0,648/0,657 dù median số điểm đều 34.720. Score cực trị của một ô góc nhạy với hình học cảnh; số beam và điều kiện cảnh khác nhau nên không dùng chung reference giữa sensor, và kết quả này không tách riêng tác động của ánh sáng.
-Bảng coi dữ liệu gốc là nhóm âm đối chứng; đây là tỷ lệ cảnh báo trên gốc, chưa chứng minh mọi frame gốc không có lỗi sensor. Hai tập nuScenes liền kề theo thời gian nên kết quả chưa chứng minh tổng quát sang scene mới.
-
-Số liệu: `results/health_scores.csv` (metric từng cấu hình), `health_threshold_sweep.csv` (tham số/ngưỡng/cờ/lý do), `health_summary.csv` (tổng hợp calibration/test), `health_selected.csv` (ngưỡng chọn và kết quả test), `health_reference.csv` (reference chỉ từ calibration). Chạy lần hai: cả 5 CSV **GIỐNG HỆT từng byte**; thư mục kiểm tra tạm đã xoá.
-
-**[B1] So sánh hai cách cảnh báo (+4):** `global_count` dùng clip(1 − finite_points/reference_n, 0, 1); `worst_bin` là score kết hợp tổng điểm và ô xấu nhất của CP3. Cùng 700 input, split, seed, reference từ calibration, ứng viên ngưỡng 0,2/0,4/0,6 và metric đánh giá tỷ lệ phát hiện/báo trên gốc; cùng quy tắc chọn ngưỡng chỉ từ calibration. Đây là so sánh hai cách làm, không chỉ lặp lại sweep ngưỡng của E.
-
-| Dataset | Cách | Ngưỡng | Báo trên gốc | Phát hiện dropout 50% | Phát hiện sector 30° |
-|---|---|---:|---:|---:|---:|
-| kitti_mini | global_count | 0.2 | 0/10 (0%) | 10/10 (100%) | 0/10 (0%) |
-| kitti_mini | worst_bin | 0.4 | 1/10 (10%) | 10/10 (100%) | 10/10 (100%) |
-| nuscenes_mini_subset | global_count | 0.2 | 0/40 (0%) | 40/40 (100%) | 0/40 (0%) |
-| nuscenes_mini_subset | worst_bin | 0.6 fallback | 32/40 (80%) | 40/40 (100%) | 40/40 (100%) |
-
-![B1 comparison](../results/figures/health_method_comparison.png)
-
-`global_count` ít báo trên gốc và bắt dropout đồng đều, nhưng bỏ sót toàn bộ sector 30° trên cả hai nhóm test (10/10 KITTI, 40/40 nuScenes). `worst_bin` bắt mất sector, nhưng báo nhầm theo đối chứng: 10% KITTI, 80% nuScenes; failure cụ thể ở mục 3. Không cách nào đạt toàn bộ claim trên cả hai dataset; chưa đề xuất kết hợp hai cách như một giải pháp đã được kiểm chứng.
-Bằng chứng: `health_method_runs.csv` (4.200 dòng: hai cách × 700 input × ba ngưỡng), `health_method_summary.csv`, `health_method_selected.csv`; chạy lại cả ba CSV giống từng byte. Ở nuScenes ngưỡng worst_bin 0,6 là fallback, không đạt mục tiêu calibration.
-
-**[B3] Latency (+2):** đo trích metric và quyết định trên frame gốc có sẵn trong RAM, CPU i5-13420H, RAM 15,7 GB, Intel UHD Graphics (không dùng GPU). Mỗi dataset/cách bỏ một warmup, sau đó 30 lần `perf_counter`: CSV có 120 dòng; tính p50/p95 bằng percentile 50/95.
-
-| Dataset / frame | Cách | Số lần sau warmup | p50 (ms) | p95 (ms) |
-|---|---|---:|---:|---:|
-| kitti_mini / 000011 | global_count | 30 | 1.366 | 2.138 |
-| kitti_mini / 000011 | worst_bin | 30 | 6.560 | 8.233 |
-| nuscenes_mini_subset / scene-0103_010 | global_count | 30 | 0.444 | 0.665 |
-| nuscenes_mini_subset / scene-0103_010 | worst_bin | 30 | 3.949 | 4.789 |
-
-Phạm vi `global_count`: lọc hữu hạn → đếm → score → flag; `worst_bin`: lọc hữu hạn → histogram 36 ô → score → flag. Không gồm đọc file, fit reference, tạo dropout hay vẽ ảnh; không suy ra latency toàn hệ thống hoặc khả năng thời gian thực. Timing thay đổi theo tải máy khi chạy lại; dữ liệu, score và tham số vẫn cố định. Bằng chứng: `health_latency.csv`, `health_latency_summary.csv`, `health_latency_hardware.json`.
-
-Baseline CP2: self-test và overlay synthetic/KITTI/nuScenes khớp 3910/19946/3120 điểm; yaw +2° có 3956 điểm nhưng lệch khỏi cột, nên số điểm trong FOV không đủ kiểm tra alignment.
-![Dashboard baseline E](../results/figures/dashboard_synthetic_cp2.png)
+![Thí nghiệm ngưỡng và suy giảm](../results/figures/health_threshold_sweep.png)
+KITTI tăng ngưỡng 0,2 → 0,6 giảm báo trên gốc 50% → 0% nhưng phát hiện random 50% giảm 100% → 60%; nuScenes giảm báo trên gốc 97,5% → 80%. Không kết luận khác biệt là do riêng ngày/đêm.
+Dashboard đầy đủ có histogram range/intensity, azimuth/elevation, số điểm, invalid và ranking review; nuScenes hai scene có gap trung vị 0,499876/0,499885 s, synthetic 000003 có gap 0,2 s thay vì 0,1 s. CSV và ba dashboard ở [bằng chứng chi tiết](EVIDENCE_DETAILS.md#dashboard-đầy-đủ-và-ranking).
+![Dashboard nuScenes](../results/figures/dashboard_nuscenes_mini_subset_final.png)
+**[B1]** Hai cách trên cùng input/split/reference/metric: global_count ít báo trên gốc nhưng bỏ sót sector; worst_bin bắt sector nhưng nhạy với cảnh. Ba CSV so sánh chạy lại giống từng byte; [bảng, plot và failure](EVIDENCE_DETAILS.md).
+**[B2]** Hai loại suy giảm × ba mức ngoài baseline, dùng `starter.perturb`, giữ seed 42; plot trên và `health_scores.csv`/`health_threshold_sweep.csv` là bằng chứng, năm CSV CP3 chạy lại giống từng byte.
+**[B3]** Mỗi dataset/cách bỏ một warmup, đo 30 lần: 120 dòng `health_latency.csv`. Worst_bin p50/p95 KITTI = 6,560/8,233 ms, nuScenes = 3,949/4,789 ms; i5-13420H, RAM 15,7 GB, chạy CPU. Chỉ tính trích metric → flag trên điểm trong RAM; bỏ I/O, fit reference, perturbation và plot, timing thay đổi theo tải máy.
+Bonus đề nghị B1+B2+B3+B4 = 12, trần +10; không đề nghị B5 (trùng Advanced E) hoặc B6 (chưa xác minh mọi lỗi synthetic). Điểm thực tế do giảng viên quyết định.
 
 ## 3. Failure case
 
-![Báo trên đối chứng nuScenes](../results/figures/fail_01_nusc_control_alarm.png)
-
-- **Trường hợp:** nuScenes `scene-0103_035`, nhóm test, dữ liệu gốc không perturb, ngưỡng fallback 0,6; bị báo nhầm theo quy ước gốc là đối chứng âm của CP3 (không khẳng định sensor thật chắc chắn sạch).
-- **Quan sát:** 34.720 điểm hữu hạn = reference tổng điểm, invalid = 0%, không có ô góc trống, nhưng score = 0,818900 > 0,6 nên bị gắn cờ.
-- **Nguyên nhân:** ô azimuth [-100°, -90°) có 550 điểm so với median calibration 3.037: hụt 81,89%; deficit tổng điểm = 0. Phép lấy max trên 36 ô khiến một thay đổi phân bố theo góc chi phối toàn bộ score. Histogram chứng minh sự khác biệt với reference, chưa chứng minh có mất dữ liệu hay nguyên nhân vật lý của sự khác biệt.
-- **Lớp debug:** **Metric** — dùng mật độ khác median để suy ra lỗi sensor mà chưa phân biệt tái phân bố theo cảnh với dropout. Reader, dữ liệu gốc và phép chiếu đã qua kiểm tra; thí nghiệm này chỉ dùng LiDAR, không dùng camera/timestamp, không dùng model hay voxel/range filter.
-- **Cách phát hiện khi chạy thật:** log total_count, invalid_ratio, empty_bins, worst_bin và reference; nếu score >0,6 nhưng tổng điểm lệch <5%, invalid ≤0,5% và empty_bins = 0 thì gắn “cần review phân bố” thay vì tự loại frame. Đây là quy tắc chẩn đoán đề xuất, chưa được benchmark; cần reference theo bối cảnh và xác nhận bằng log sensor/chuỗi frame.
-
-![Bỏ sót dropout có chủ đích](../results/figures/fail_02_kitti_dropout_missed.png)
-
-- **Trường hợp:** KITTI `000021`, nhóm test, random dropout giữ 50% với seed 42, thử ngưỡng lỏng 0,6 của sweep; đây không phải ngưỡng KITTI 0,4 được chọn ở CP3.
-- **Quan sát:** 125.260 → 62.348 điểm (mất thực tế 50,23%), score 0,109763 → 0,554524, vẫn không báo vì 0,554524 ≤0,6. Trong toàn bộ test KITTI, ngưỡng 0,6 bỏ sót 4/10 frame dropout 50%.
-- **Nguyên nhân:** reference tổng điểm 120.851,5 cho deficit toàn cục 0,484094; ô xấu nhất [-170°, -160°) có 1.248/2.801,5 điểm, deficit 0,554524. Dropout phân bố đều không tạo ô trống, nên score tăng nhưng chưa vượt ngưỡng; tăng ngưỡng để giảm báo nhầm đánh đổi trực tiếp khả năng phát hiện.
-- **Lớp debug:** **Metric** — ngưỡng quyết định quá lỏng cho mức suy giảm cần phát hiện; perturbation có chủ đích, seed cố định, không sửa dữ liệu gốc.
-- **Cách phát hiện khi chạy thật:** với KITTI dùng ngưỡng 0,4 được chọn bằng calibration ở CP3: frame này được báo; kết quả test là phát hiện 10/10 dropout 50%, báo nhầm 1/10 gốc. Theo dõi thêm rolling median số điểm và dropout theo từng ô; chưa chứng minh ngưỡng này tổng quát sang sensor/scene mới.
-
-Kiểm tra loại trừ: checksum nuScenes 173/173 PASS; `src.test_projection` PASS; CP4 tính lại score từ raw points và assert khớp CSV CP3. Số liệu từng failure ở `results/health_failure_details.csv`.
-**Giải thích 30 giây:** “Metric lấy ô góc hụt nhiều nhất, nên nuScenes có đủ tổng điểm vẫn bị báo khi một ô lệch khỏi median. Ngược lại, khi tăng ngưỡng lên 0,6, KITTI mất hơn nửa số điểm vẫn bị bỏ sót. Cần log cả số điểm tổng và phân bố góc, chọn ngưỡng trên calibration, và xem cảnh báo như tín hiệu review chứ chưa đủ kết luận sensor hỏng.”
+![Failure trên đối chứng nuScenes](../results/figures/fail_01_nusc_control_alarm.png)
+- **Trường hợp:** nuScenes scene-0103_035, dữ liệu gốc, score 0,818900 > fallback 0,6: bị báo theo đối chứng âm dù tổng 34.720 điểm = reference, invalid 0%, empty bins 0.
+- **Nguyên nhân:** ô [-100°,−90°) có 550/3.037 điểm, deficit 81,89% chi phối max; khác phân bố không đủ chứng minh dropout hay lỗi phần cứng. **Lớp debug: Metric.**
+- **Phát hiện khi chạy thật:** log total_count, worst_bin và invalid; nếu score >0,6 nhưng total lệch <5%, invalid ≤0,5%, empty bins =0 thì chuyển sang review phân bố. Đây là đề xuất chưa benchmark, cần xác nhận bằng log sensor/chuỗi frame.
+- **Failure thứ hai:** KITTI 000021, random dropout seed 42 làm 125.260 → 62.348 điểm (−50,23%) nhưng score 0,554524 ≤0,6 nên bị bỏ sót; Metric/ngưỡng quá lỏng. Ngưỡng 0,4 chọn ở CP3 bắt được frame này nhưng còn báo trên gốc 10%.
+Chi tiết, ảnh `fail_02_*` và số liệu: [phân tích failure](EVIDENCE_DETAILS.md#3-failure-case), `results/health_failure_details.csv`; score tính lại từ raw points khớp CSV CP3, checksum và self-test PASS.
 
 ## 4. Khuyến nghị nếu triển khai thật
 
-Use-case: công cụ QA log LiDAR của robot giao hàng, xếp frame bất thường để kỹ sư kiểm tra trước khi gán nhãn; chưa dùng score này để điều khiển phanh hay tự loại dữ liệu.
-KITTI cho thấy ngưỡng 0,4 phát hiện đủ hai loại suy giảm mạnh nhưng còn 10% báo trên gốc; nuScenes cho thấy reference cố định theo dataset chưa đủ, cần kiểm tra theo bối cảnh và đánh giá trên scene mới.
-Log tối thiểu: frame ID/timestamp, sensor ID, số điểm hữu hạn, invalid_ratio, histogram góc, worst_bin, reference/version, score, ngưỡng và lý do gắn cờ; khi đối chiếu camera cần log độ lệch thời gian và trạng thái bù chuyển động.
-Đánh đổi: ngưỡng thấp tăng tải review, ngưỡng cao bỏ sót dropout; cảnh thưa tự nhiên có thể giống lỗi sensor. Giữ dữ liệu gốc, phân biệt cảnh báo mật độ và kết luận hỏng sensor, xác nhận bằng chuỗi frame và log phần cứng.
-Bước tiếp theo: reference theo sensor/bối cảnh, kiểm tra nhóm ô liên tiếp thay cho một ô cực trị, đánh giá trên scene độc lập và đo latency của phần trích metric trên CPU trước khi tích hợp online.
+Use-case: QA log LiDAR của robot giao hàng trước khi gán nhãn; xếp frame để kỹ sư review, giữ dữ liệu gốc, chưa dùng score để phanh hoặc tự loại dữ liệu.
+Với KITTI dùng ngưỡng review 0,4; nuScenes cần reference theo bối cảnh và kiểm tra trên scene mới. Ngưỡng thấp tăng tải review, cao bỏ sót dropout; worst_bin tốn p95 8,233 ms trên frame KITTI đã đo, nhưng chưa có latency toàn hệ thống.
+Log frame/timestamp, sensor ID, finite_count, invalid_ratio, histogram, worst_bin, reference/version, score, ngưỡng và lý do; khi đối chiếu camera thêm time offset và ego-motion.
+Quy tắc bổ trợ: invalid >0,5%, ô azimuth trống >0, time gap lệch quá ±20% so với expected; gap expected 0,5 s cho nuScenes, median timestamps cho synthetic, KITTI không có timestamp. Đây là cờ kiểm tra, không phải bằng chứng sensor hỏng.
+Bước tiếp theo: kiểm tra nhóm ô liên tiếp, reference theo bối cảnh, xác nhận nhiều frame liên tục và đánh giá scene độc lập; đo cả I/O trước khi triển khai online.
 
 ## 5. Cách chạy lại
 
-Chạy từ thư mục gốc repo trong PowerShell, dùng Python >=3.10; nếu đã có `.venv` thì bỏ lệnh tạo môi trường.
+Từ gốc repo, PowerShell và Python 3.12; `requirements-lock.txt` ghi đúng phiên bản môi trường đã đo. Nếu đã có `.venv` thì bỏ lệnh tạo; trên Linux/macOS dùng `python3 -m venv .venv` và `source .venv/bin/activate`.
 
 ```powershell
 py -3.12 -m venv .venv
 .\.venv\Scripts\Activate.ps1
-python -m pip install -r requirements.txt
+python -m pip install -r requirements-lock.txt
+python tools/verify_data.py --data-root data/kitti_mini
+python tools/verify_data.py --data-root data/nuscenes_mini_subset
 python -m src.test_projection
 python -m starter.projection --data-root data/synthetic --frame 000000
 python -m starter.projection --data-root data/kitti_mini --frame 000011
 python -m starter.projection --data-root data/nuscenes_mini_subset --frame scene-0103_010
 python -m starter.projection --data-root data/synthetic --frame 000000 --yaw-deg 2
 python -m starter.data_health --data-root data/synthetic --out results/data_health.csv
-python -m src.data_health_dashboard --csv results/data_health.csv --out results/figures/dashboard_synthetic_cp2.png
-python -m src.exp_health_sweep --seed 42 --thresholds 0.2 0.4 0.6 --out-dir results
+python -m starter.data_health --data-root data/kitti_mini --out results/data_health_kitti.csv
+python -m starter.data_health --data-root data/nuscenes_mini_subset --out results/data_health_nusc.csv
+python -m src.data_health_dashboard
+python -m src.exp_health_sweep
 python -m src.plot_health_sweep
 python -m src.analyze_health_failure
 python -m src.compare_health_methods
+python -m src.dataset_health_dashboard
 python -m src.benchmark_health_latency --repeats 30
+python tools/check_submission.py
 ```
 
-Self-test kiểm tra điểm chuẩn `(10,0,0)`, NaN/Inf, điểm sau camera, FOV, biên ảnh, mảng rỗng và mẫu số chiếu bằng 0; đồng thời xác nhận số điểm trong ảnh của cả ba dataset.
-Trên macOS/Linux, tạo môi trường bằng `python3 -m venv .venv` và kích hoạt bằng `source .venv/bin/activate`; các lệnh Python còn lại giữ nguyên.
+**[B4]** Tool `src.exp_health_sweep` chạy mặc định được, mỗi tham số có help; `python -m src.exp_health_sweep --help` mô tả root, threshold, seed, output. Ví dụ đổi cấu hình: `python -m src.exp_health_sweep --data-roots data/kitti_mini --thresholds 0.2 0.4 0.6 --seed 42 --out-dir results/kitti_health` (không cần chạy để tái tạo báo cáo).
+Tự nhận biết KITTI/nuScenes để dùng sector phía trước 0°/90°; input cần ≥2 frame và calibration có điểm hữu hạn. Ranking dựa trên score để review, chưa chứng minh chất lượng nhãn hay giá trị retrain.
 
-**[B4] Tool tái sử dụng (+3):** `src/exp_health_sweep.py` có mặc định chạy hai dataset và seed 42; mỗi tham số đều có `help`. Có thể đổi root dữ liệu, ngưỡng, seed và thư mục xuất mà không sửa code; định dạng KITTI/nuScenes được tự nhận biết để dùng đúng hướng sector phía trước (0°/90°). Đã kiểm tra `--help` và chạy không tham số thành công, giữ nguyên checksum cả năm CSV CP3.
-
-```powershell
-python -m src.exp_health_sweep --help
-python -m src.exp_health_sweep
-python -m src.exp_health_sweep --data-roots data/kitti_mini --thresholds 0.2 0.4 0.6 --seed 42 --out-dir results/kitti_health
-```
-
-Lệnh cuối minh họa xuất riêng; không cần chạy để tái tạo báo cáo. Chạy từ gốc repo; root cần ≥2 frame, calibration có điểm hữu hạn. Công cụ chỉ báo mật độ so với reference, chưa phân loại được mọi loại lỗi sensor; xem failure ở mục 3.
+Kiểm tra CP5: clone remote vào thư mục mới, áp dụng snapshot thay đổi cuối và tạo `.venv` riêng; cả 19 lệnh tái tạo/kiểm tra trên đều PASS. 16 CSV xác định và 12 PNG giống từng byte; timing được kiểm tra riêng, không yêu cầu giống thời gian đo.
 
 ## 6. Khai báo sử dụng AI
 
-Ghi rõ đã dùng công cụ AI nào, dùng vào việc gì, và bạn đã tự kiểm chứng kết quả đó bằng cách nào. Nếu không dùng AI, ghi "Không sử dụng". Xem quy định ở `RULES.md` mục 2.
-
-| Công cụ | Dùng cho việc gì | Bạn đã kiểm chứng thế nào |
+| Công cụ / nguồn | Dùng cho việc gì | Kiểm chứng đã thực hiện |
 |---|---|---|
-| Codex | Hỗ trợ thiết lập CP0; đọc rubric, kiểm tra cấu hình máy, chọn topic E và soạn kế hoạch/claim nháp CP1; cài hai hàm phép chiếu CP2, self-test và dashboard baseline; viết thí nghiệm/quét ngưỡng CP3, plot và phân tích kết quả; tái hiện hai failure CP4 và viết phân tích nguyên nhân/lớp debug; bổ sung khuyến nghị, so sánh B1, ghi bằng chứng stress B2, đo latency B3 và hoàn thiện CLI B4. Tái sử dụng reader và perturbation từ starter; không dùng script yaw mẫu làm thí nghiệm E. | Đã chạy kiểm tra import, checksum và thống kê CP0; đối chiếu topic/claim với CHECKPOINTS.md, TOPICS.md, RUBRIC.md và kiểm tra frame tồn tại. CP2 đã chạy self-test, xác nhận 3910/19946/3120 điểm và xem ảnh overlay/dashboard. CP3 đã chạy 700 cấu hình, kiểm tra score bằng dữ liệu có đáp án biết trước, so sánh cả 5 CSV lần chạy lại giống từng byte và xem biểu đồ; claim ban đầu bị bác bỏ trên nuScenes. CP4 đã tính lại score từ raw points, assert khớp CP3, kiểm tra checksum nuScenes và self-test phép chiếu, xem hai ảnh failure. Bonus: B1 ba CSV giống từng byte khi chạy lại; B3 kiểm tra 120 dòng sau warmup và score ổn định; B4 kiểm tra help/default; xem plot so sánh, chạy checker hình thức. Học viên cần tự chạy lại và giải thích kết quả. |
+| Codex | Hỗ trợ setup, chọn topic/claim, viết hai hàm projection, test, dashboard, thí nghiệm, failure, bonus và biên tập REPORT. | Chạy checksum, điểm chuẩn/projection 3910/19946/3120; tính lại failure khớp CSV, xem ảnh; CP3/B1 rerun giống từng byte; kiểm tra warmup/120 latency rows và CLI; checker hình thức PASS; clone mới + venv riêng chạy đủ lệnh, 16 CSV và 12 PNG tái tạo giống từng byte. |
+| Codelab và starter repo | Tham khảo self-test CP2, tái sử dụng reader, perturbation và point_stats; logic thí nghiệm E và so sánh do code trong src thực hiện. | Giữ nguyên data và mọi starter ngoài hai hàm được phép; cố định seed, reference từ calibration, báo claim bị bác bỏ và phạm vi timing. |
+
+Học viên cần tự chạy lại, hiểu code và giải thích số liệu; không khai rằng học viên đã tự kiểm chứng nếu chưa thực hiện. Chi tiết số liệu, giới hạn và bonus ở [EVIDENCE_DETAILS.md](EVIDENCE_DETAILS.md).
