@@ -1,0 +1,4 @@
+dataset,frame,perturbation,threshold,score,flagged,n_points,finite_points,invalid_ratio,empty_azimuth_bins,reference_n_points,global_deficit,worst_az_start_deg,worst_az_end_deg,worst_bin_points,worst_bin_reference,local_deficit
+nuscenes_mini_subset,scene-0103_035,original,0.6,0.8189002305,True,34720,34720,0,0,34720,0,-100,-90,550,3037,0.8189002305
+kitti_mini,000021,original,0.6,0.1097626272,False,125260,125260,0,0,120851.5,0,-170,-160,2494,2801.5,0.1097626272
+kitti_mini,000021,random_dropout_50pct,0.6,0.5545243619,False,62348,62348,0,0,120851.5,0.4840941155,-170,-160,1248,2801.5,0.5545243619
