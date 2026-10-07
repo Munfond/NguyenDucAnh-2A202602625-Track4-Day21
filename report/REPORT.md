@@ -74,9 +74,11 @@ Kiểm tra loại trừ: checksum nuScenes 173/173 PASS; `src.test_projection` P
 
 ## 4. Khuyến nghị nếu triển khai thật
 
-Use-case cụ thể (ADAS / robot / drone), trade-off và bước tiếp theo.
-
-[ĐIỀN]
+Use-case: công cụ QA log LiDAR của robot giao hàng, xếp frame bất thường để kỹ sư kiểm tra trước khi gán nhãn; chưa dùng score này để điều khiển phanh hay tự loại dữ liệu.
+KITTI cho thấy ngưỡng 0,4 phát hiện đủ hai loại suy giảm mạnh nhưng còn 10% báo trên gốc; nuScenes cho thấy reference cố định theo dataset chưa đủ, cần kiểm tra theo bối cảnh và đánh giá trên scene mới.
+Log tối thiểu: frame ID/timestamp, sensor ID, số điểm hữu hạn, invalid_ratio, histogram góc, worst_bin, reference/version, score, ngưỡng và lý do gắn cờ; khi đối chiếu camera cần log độ lệch thời gian và trạng thái bù chuyển động.
+Đánh đổi: ngưỡng thấp tăng tải review, ngưỡng cao bỏ sót dropout; cảnh thưa tự nhiên có thể giống lỗi sensor. Giữ dữ liệu gốc, phân biệt cảnh báo mật độ và kết luận hỏng sensor, xác nhận bằng chuỗi frame và log phần cứng.
+Bước tiếp theo: reference theo sensor/bối cảnh, kiểm tra nhóm ô liên tiếp thay cho một ô cực trị, đánh giá trên scene độc lập và đo latency của phần trích metric trên CPU trước khi tích hợp online.
 
 ## 5. Cách chạy lại
 
