@@ -1,0 +1,12 @@
+{
+  "cpu": "13th Gen Intel(R) Core(TM) i5-13420H",
+  "ram_gb": 15.7,
+  "gpu": [
+    "Intel(R) UHD Graphics"
+  ],
+  "os": "Windows-11-10.0.26200-SP0",
+  "python": "3.12.10",
+  "numpy": "2.5.3",
+  "execution_device": "CPU",
+  "scope": "original points in RAM -> finite filter/count + histogram for worst_bin + score + flag; no disk I/O, perturbation, reference fitting or plots"
+}

@@ -1,0 +1,5 @@
+dataset,frame,method,repeats,p50_ms,p95_ms
+kitti_mini,000011,global_count,30,1.3657,2.137715001
+kitti_mini,000011,worst_bin,30,6.56,8.23272
+nuscenes_mini_subset,scene-0103_010,global_count,30,0.4435499995,0.6648049999
+nuscenes_mini_subset,scene-0103_010,worst_bin,30,3.94905,4.788930001

@@ -9,7 +9,7 @@ from pathlib import Path
 import numpy as np
 import pandas as pd
 
-from starter.datasets import list_frames, load_points
+from starter.datasets import dataset_type, list_frames, load_points
 from starter.perturb import random_dropout, sector_dropout
 
 
@@ -32,10 +32,10 @@ def health_score(n, hist, reference_n, reference_hist):
 
 def main():
     ap = argparse.ArgumentParser(description=__doc__)
-    ap.add_argument("--data-roots", nargs="+", default=["data/kitti_mini", "data/nuscenes_mini_subset"])
-    ap.add_argument("--thresholds", nargs="+", type=float, default=[.2, .4, .6])
-    ap.add_argument("--seed", type=int, default=42)
-    ap.add_argument("--out-dir", default="results")
+    ap.add_argument("--data-roots", nargs="+", default=["data/kitti_mini", "data/nuscenes_mini_subset"], help="Dataset roots; nuScenes azimuth is interpreted in its native sensor axes")
+    ap.add_argument("--thresholds", nargs="+", type=float, default=[.2, .4, .6], help="Density-deficit thresholds in [0,1]; flag when score is strictly greater")
+    ap.add_argument("--seed", type=int, default=42, help="Fixed seed for each random-dropout configuration")
+    ap.add_argument("--out-dir", default="results", help="Output directory for five CSVs; calibration reference uses even-index frames only")
     args = ap.parse_args()
     if not args.thresholds or any(not 0 <= x <= 1 for x in args.thresholds):
         ap.error("Thresholds must be in [0,1]")
@@ -43,6 +43,8 @@ def main():
     for root in args.data_roots:
         dataset = Path(root).name
         frames = sorted(list_frames(root))
+        if len(frames) < 2:
+            ap.error(f"{root}: need at least two frames for calibration/test split")
         loaded = {fid: load_points(root, fid) for fid in frames}
         # Split independently within each scene so both conditions are represented.
         splits = {}
@@ -52,12 +54,14 @@ def main():
         base = {fid: density(pts) for fid, pts in loaded.items()}
         calibration = [base[fid] for fid in frames if splits[fid] == 'calibration']
         reference_n = float(np.median([item[0] for item in calibration]))
+        if reference_n <= 0:
+            ap.error(f"{root}: calibration frames contain no finite points")
         reference_hist = np.median([item[1] for item in calibration], axis=0)
         for i, count in enumerate(reference_hist):
             refs.append(dict(dataset=dataset, az_start_deg=-180 + i * 10,
                              az_end_deg=-170 + i * 10, reference_bin_points=count,
                              reference_n_points=reference_n))
-        center = 90. if dataset == 'nuscenes_mini_subset' else 0.
+        center = 90. if dataset_type(root) == 'nuscenes' else 0.
         for fid, pts in loaded.items():
             configs = [('original', 0., pts)]
             configs += [('random_dropout', level, random_dropout(pts, 1 - level, seed=args.seed))

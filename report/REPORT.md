@@ -1,6 +1,6 @@
 # Báo cáo Day 6: Phát hiện suy giảm LiDAR bằng mật độ góc quét
 
-> Thay **mọi** ô có chữ ĐIỀN nằm trong ngoặc vuông bằng nội dung của bạn, xoá luôn cả dấu ngoặc vuông. Lệnh `python tools/check_submission.py` sẽ báo FAIL nếu còn sót bất kỳ chỗ nào.
+> Phần bắt buộc đã đủ 5 sản phẩm. Đề nghị xét bonus B1 (+4), B2 (+3), B3 (+2), B4 (+3): tổng đề nghị 12, chỉ cộng tối đa 10 và tổng điểm không vượt 100; việc tính điểm do giảng viên quyết định. Không đề nghị B5 vì so sánh hai dataset trùng yêu cầu Advanced của E; không đề nghị B6 khi chưa xác minh tất cả lỗi synthetic.
 
 - **Họ tên:** Nguyễn Đức Anh
 - **MSSV:** 2A202602625
@@ -40,6 +40,8 @@ Tách calibration/test chẵn/lẻ từ trước; nuScenes tách riêng từng s
 | nuscenes_mini_subset | 0.4 | 37/40 (92.5%) | 40/40 (100%) | 40/40 (100%) |
 | nuscenes_mini_subset | 0.6 | 32/40 (80%) | 40/40 (100%) | 40/40 (100%) |
 
+**[B2] Stress test (+3):** hai loại từ `starter.perturb` × ba mức: random dropout 10/30/50% và sector dropout 10/20/30°, có mức gốc 0, seed 42, giữ nguyên frame/reference/ngưỡng khi đổi mức. Plot bên dưới cho thấy mức suy giảm theo score và khả năng gắn cờ; số liệu từng cấu hình ở `health_scores.csv`/`health_threshold_sweep.csv`. Đây là phần mở rộng ngoài yêu cầu chính E về quét ngưỡng trên dữ liệu gốc.
+
 ![Threshold trade-off and degradation response](../results/figures/health_threshold_sweep.png)
 
 KITTI: tăng ngưỡng từ 0,2 lên 0,6 làm báo nhầm giảm 50% → 0%, nhưng phát hiện dropout 50% giảm 100% → 60%; mất sector 30° vẫn đạt 100%.
@@ -47,6 +49,31 @@ nuScenes: báo nhầm giảm 97,5% → 80% khi tăng ngưỡng 0,2 → 0,6; mean
 Bảng coi dữ liệu gốc là nhóm âm đối chứng; đây là tỷ lệ cảnh báo trên gốc, chưa chứng minh mọi frame gốc không có lỗi sensor. Hai tập nuScenes liền kề theo thời gian nên kết quả chưa chứng minh tổng quát sang scene mới.
 
 Số liệu: `results/health_scores.csv` (metric từng cấu hình), `health_threshold_sweep.csv` (tham số/ngưỡng/cờ/lý do), `health_summary.csv` (tổng hợp calibration/test), `health_selected.csv` (ngưỡng chọn và kết quả test), `health_reference.csv` (reference chỉ từ calibration). Chạy lần hai: cả 5 CSV **GIỐNG HỆT từng byte**; thư mục kiểm tra tạm đã xoá.
+
+**[B1] So sánh hai cách cảnh báo (+4):** `global_count` dùng clip(1 − finite_points/reference_n, 0, 1); `worst_bin` là score kết hợp tổng điểm và ô xấu nhất của CP3. Cùng 700 input, split, seed, reference từ calibration, ứng viên ngưỡng 0,2/0,4/0,6 và metric đánh giá tỷ lệ phát hiện/báo trên gốc; cùng quy tắc chọn ngưỡng chỉ từ calibration. Đây là so sánh hai cách làm, không chỉ lặp lại sweep ngưỡng của E.
+
+| Dataset | Cách | Ngưỡng | Báo trên gốc | Phát hiện dropout 50% | Phát hiện sector 30° |
+|---|---|---:|---:|---:|---:|
+| kitti_mini | global_count | 0.2 | 0/10 (0%) | 10/10 (100%) | 0/10 (0%) |
+| kitti_mini | worst_bin | 0.4 | 1/10 (10%) | 10/10 (100%) | 10/10 (100%) |
+| nuscenes_mini_subset | global_count | 0.2 | 0/40 (0%) | 40/40 (100%) | 0/40 (0%) |
+| nuscenes_mini_subset | worst_bin | 0.6 fallback | 32/40 (80%) | 40/40 (100%) | 40/40 (100%) |
+
+![B1 comparison](../results/figures/health_method_comparison.png)
+
+`global_count` ít báo trên gốc và bắt dropout đồng đều, nhưng bỏ sót toàn bộ sector 30° trên cả hai nhóm test (10/10 KITTI, 40/40 nuScenes). `worst_bin` bắt mất sector, nhưng báo nhầm theo đối chứng: 10% KITTI, 80% nuScenes; failure cụ thể ở mục 3. Không cách nào đạt toàn bộ claim trên cả hai dataset; chưa đề xuất kết hợp hai cách như một giải pháp đã được kiểm chứng.
+Bằng chứng: `health_method_runs.csv` (4.200 dòng: hai cách × 700 input × ba ngưỡng), `health_method_summary.csv`, `health_method_selected.csv`; chạy lại cả ba CSV giống từng byte. Ở nuScenes ngưỡng worst_bin 0,6 là fallback, không đạt mục tiêu calibration.
+
+**[B3] Latency (+2):** đo trích metric và quyết định trên frame gốc có sẵn trong RAM, CPU i5-13420H, RAM 15,7 GB, Intel UHD Graphics (không dùng GPU). Mỗi dataset/cách bỏ một warmup, sau đó 30 lần `perf_counter`: CSV có 120 dòng; tính p50/p95 bằng percentile 50/95.
+
+| Dataset / frame | Cách | Số lần sau warmup | p50 (ms) | p95 (ms) |
+|---|---|---:|---:|---:|
+| kitti_mini / 000011 | global_count | 30 | 1.366 | 2.138 |
+| kitti_mini / 000011 | worst_bin | 30 | 6.560 | 8.233 |
+| nuscenes_mini_subset / scene-0103_010 | global_count | 30 | 0.444 | 0.665 |
+| nuscenes_mini_subset / scene-0103_010 | worst_bin | 30 | 3.949 | 4.789 |
+
+Phạm vi `global_count`: lọc hữu hạn → đếm → score → flag; `worst_bin`: lọc hữu hạn → histogram 36 ô → score → flag. Không gồm đọc file, fit reference, tạo dropout hay vẽ ảnh; không suy ra latency toàn hệ thống hoặc khả năng thời gian thực. Timing thay đổi theo tải máy khi chạy lại; dữ liệu, score và tham số vẫn cố định. Bằng chứng: `health_latency.csv`, `health_latency_summary.csv`, `health_latency_hardware.json`.
 
 Baseline CP2: self-test và overlay synthetic/KITTI/nuScenes khớp 3910/19946/3120 điểm; yaw +2° có 3956 điểm nhưng lệch khỏi cột, nên số điểm trong FOV không đủ kiểm tra alignment.
 ![Dashboard baseline E](../results/figures/dashboard_synthetic_cp2.png)
@@ -98,10 +125,22 @@ python -m src.data_health_dashboard --csv results/data_health.csv --out results/
 python -m src.exp_health_sweep --seed 42 --thresholds 0.2 0.4 0.6 --out-dir results
 python -m src.plot_health_sweep
 python -m src.analyze_health_failure
+python -m src.compare_health_methods
+python -m src.benchmark_health_latency --repeats 30
 ```
 
 Self-test kiểm tra điểm chuẩn `(10,0,0)`, NaN/Inf, điểm sau camera, FOV, biên ảnh, mảng rỗng và mẫu số chiếu bằng 0; đồng thời xác nhận số điểm trong ảnh của cả ba dataset.
 Trên macOS/Linux, tạo môi trường bằng `python3 -m venv .venv` và kích hoạt bằng `source .venv/bin/activate`; các lệnh Python còn lại giữ nguyên.
+
+**[B4] Tool tái sử dụng (+3):** `src/exp_health_sweep.py` có mặc định chạy hai dataset và seed 42; mỗi tham số đều có `help`. Có thể đổi root dữ liệu, ngưỡng, seed và thư mục xuất mà không sửa code; định dạng KITTI/nuScenes được tự nhận biết để dùng đúng hướng sector phía trước (0°/90°). Đã kiểm tra `--help` và chạy không tham số thành công, giữ nguyên checksum cả năm CSV CP3.
+
+```powershell
+python -m src.exp_health_sweep --help
+python -m src.exp_health_sweep
+python -m src.exp_health_sweep --data-roots data/kitti_mini --thresholds 0.2 0.4 0.6 --seed 42 --out-dir results/kitti_health
+```
+
+Lệnh cuối minh họa xuất riêng; không cần chạy để tái tạo báo cáo. Chạy từ gốc repo; root cần ≥2 frame, calibration có điểm hữu hạn. Công cụ chỉ báo mật độ so với reference, chưa phân loại được mọi loại lỗi sensor; xem failure ở mục 3.
 
 ## 6. Khai báo sử dụng AI
 
@@ -109,4 +148,4 @@ Ghi rõ đã dùng công cụ AI nào, dùng vào việc gì, và bạn đã t�
 
 | Công cụ | Dùng cho việc gì | Bạn đã kiểm chứng thế nào |
 |---|---|---|
-| Codex | Hỗ trợ thiết lập CP0; đọc rubric, kiểm tra cấu hình máy, chọn topic E và soạn kế hoạch/claim nháp CP1; cài hai hàm phép chiếu CP2, self-test và dashboard baseline; viết thí nghiệm/quét ngưỡng CP3, plot và phân tích kết quả; tái hiện hai failure CP4 và viết phân tích nguyên nhân/lớp debug. Tái sử dụng reader và perturbation từ starter; không dùng script yaw mẫu làm thí nghiệm E. | Đã chạy kiểm tra import, checksum và thống kê CP0; đối chiếu topic/claim với CHECKPOINTS.md, TOPICS.md, RUBRIC.md và kiểm tra frame tồn tại. CP2 đã chạy self-test, xác nhận 3910/19946/3120 điểm và xem ảnh overlay/dashboard. CP3 đã chạy 700 cấu hình, kiểm tra score bằng dữ liệu có đáp án biết trước, so sánh cả 5 CSV lần chạy lại giống từng byte và xem biểu đồ; claim ban đầu bị bác bỏ trên nuScenes. CP4 đã tính lại score từ raw points, assert khớp CP3, kiểm tra checksum nuScenes và self-test phép chiếu, xem hai ảnh failure. Học viên cần tự chạy lại và giải thích kết quả. |
+| Codex | Hỗ trợ thiết lập CP0; đọc rubric, kiểm tra cấu hình máy, chọn topic E và soạn kế hoạch/claim nháp CP1; cài hai hàm phép chiếu CP2, self-test và dashboard baseline; viết thí nghiệm/quét ngưỡng CP3, plot và phân tích kết quả; tái hiện hai failure CP4 và viết phân tích nguyên nhân/lớp debug; bổ sung khuyến nghị, so sánh B1, ghi bằng chứng stress B2, đo latency B3 và hoàn thiện CLI B4. Tái sử dụng reader và perturbation từ starter; không dùng script yaw mẫu làm thí nghiệm E. | Đã chạy kiểm tra import, checksum và thống kê CP0; đối chiếu topic/claim với CHECKPOINTS.md, TOPICS.md, RUBRIC.md và kiểm tra frame tồn tại. CP2 đã chạy self-test, xác nhận 3910/19946/3120 điểm và xem ảnh overlay/dashboard. CP3 đã chạy 700 cấu hình, kiểm tra score bằng dữ liệu có đáp án biết trước, so sánh cả 5 CSV lần chạy lại giống từng byte và xem biểu đồ; claim ban đầu bị bác bỏ trên nuScenes. CP4 đã tính lại score từ raw points, assert khớp CP3, kiểm tra checksum nuScenes và self-test phép chiếu, xem hai ảnh failure. Bonus: B1 ba CSV giống từng byte khi chạy lại; B3 kiểm tra 120 dòng sau warmup và score ổn định; B4 kiểm tra help/default; xem plot so sánh, chạy checker hình thức. Học viên cần tự chạy lại và giải thích kết quả. |
